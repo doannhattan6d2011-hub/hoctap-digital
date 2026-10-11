@@ -2,40 +2,35 @@ import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
-    const { email, password, username } = await request.json();
+    const body = await request.json().catch(() => ({}));
+    const { email, password, username } = body;
 
     if (!email || !password) {
       return NextResponse.json(
-        { message: "Vui lòng nhập đầy đủ email và mật khẩu!" },
+        { message: "Vui lòng nhập đầy đủ Email và Mật khẩu!" },
         { status: 400 }
       );
     }
 
-    if (password.length < 6) {
-      return NextResponse.json(
-        { message: "Mật khẩu tối thiểu phải có từ 6 ký tự!" },
-        { status: 400 }
-      );
-    }
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanUsername = username ? String(username).trim() : cleanEmail.split("@")[0];
 
-    const cleanEmail = email.trim().toLowerCase();
-    const isAdmin =
-      cleanEmail.includes("admin") ||
-      cleanEmail.includes("phanthiphuong");
+    // Tự động phân quyền Admin nếu email chứa phanthiphuong hoặc admin
+    const isAdmin = cleanEmail.includes("admin") || cleanEmail.includes("phanthiphuong");
 
     const user = {
-      username: username || cleanEmail.split("@")[0],
+      username: cleanUsername,
       email: cleanEmail,
       role: isAdmin ? "admin" : "user",
-      name: cleanEmail.split("@")[0],
+      name: cleanUsername,
     };
 
     const response = NextResponse.json({
-      message: "Đăng ký thành công!",
+      message: "Đăng ký tài khoản thành công!",
       user,
     });
 
-    // Tạo cookie đăng nhập ngay sau khi đăng ký thành công
+    // Lưu cookie phiên đăng nhập
     response.cookies.set({
       name: "user_session",
       value: JSON.stringify(user),
@@ -47,7 +42,7 @@ export async function POST(request: Request) {
     return response;
   } catch (error: any) {
     return NextResponse.json(
-      { message: "Lỗi xử lý đăng ký", error: error.message },
+      { message: "Lỗi hệ thống khi đăng ký", error: error.message },
       { status: 500 }
     );
   }
