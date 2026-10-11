@@ -1,28 +1,52 @@
-import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+"use client";
+import React, { useEffect, useState } from "react";
 
-export default async function Documents({ searchParams }: { searchParams: Promise<{q?:string;subject?:string;grade?:string}> }) {
-  const params = await searchParams;
-  const q = params.q?.trim() || "";
-  const subject = params.subject?.trim() || "";
-  const grade = params.grade?.trim() || "";
-  const docs = await prisma.document.findMany({
-    where: { AND: [q ? { OR: [{title:{contains:q,mode:"insensitive"}},{description:{contains:q,mode:"insensitive"}},{chapter:{contains:q,mode:"insensitive"}}] } : {}, subject ? {subject} : {}, grade ? {grade} : {}] },
-    orderBy: { createdAt: "desc" },
-  });
-  const subjects = await prisma.document.findMany({distinct:["subject"],select:{subject:true},orderBy:{subject:"asc"}});
-  const grades = await prisma.document.findMany({distinct:["grade"],select:{grade:true},orderBy:{grade:"asc"}});
-  return <div className="container" style={{padding:"40px 0 70px"}}>
-    <div style={{marginBottom:20}}><div className="muted" style={{fontSize:13}}>Kho học liệu</div><h1 style={{fontSize:38,margin:"5px 0"}}>Tất cả tài liệu</h1></div>
-    <form className="card" style={{padding:16,display:"grid",gridTemplateColumns:"2fr 1fr 1fr auto",gap:10,marginBottom:22}}>
-      <input className="input" name="q" defaultValue={q} placeholder="Tìm tên, chương, mô tả…" />
-      <select className="input" name="subject" defaultValue={subject}><option value="">Tất cả môn</option>{subjects.map(x=><option key={x.subject}>{x.subject}</option>)}</select>
-      <select className="input" name="grade" defaultValue={grade}><option value="">Tất cả lớp</option>{grades.map(x=><option key={x.grade}>{x.grade}</option>)}</select>
-      <button className="btn btn-primary" type="submit">Lọc</button>
-    </form>
-    <div className="grid-auto">
-      {docs.map(d=><Link key={d.id} href={`/documents/${d.id}`} className="card" style={{padding:20}}><div style={{fontSize:12,fontWeight:700,color:"#6b7280"}}>{d.subject} · {d.grade}</div><h2 style={{fontSize:19,margin:"10px 0 7px"}}>{d.title}</h2><p className="muted" style={{fontSize:13,lineHeight:1.5}}>{d.description || "Không có mô tả."}</p><div className="muted" style={{fontSize:12,marginTop:12}}>{d.chapter || "Không phân chương"} · {d.downloadCount} lượt tải</div></Link>)}
-      {!docs.length && <div className="card" style={{padding:24}}>Không tìm thấy tài liệu phù hợp.</div>}
+export default function HomePage() {
+  const [files, setFiles] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Đọc chính xác nguồn dữ liệu mà Admin đã tải lên
+    const stored = localStorage.getItem("mock_documents");
+    if (stored) {
+      setFiles(JSON.parse(stored));
+    }
+  }, []);
+
+  return (
+    <div style={{ padding: "40px", maxWidth: "1200px", margin: "0 auto", fontFamily: "sans-serif" }}>
+      <div style={{ textAlign: "center", marginBottom: "40px" }}>
+        <h1 style={{ fontSize: "36px", color: "#0f172a", fontWeight: "900" }}>📚 KHO HỌC LIỆU SỐ</h1>
+        <p style={{ color: "#64748b", fontSize: "18px" }}>Danh sách các bài giảng và tài liệu được chia sẻ mới nhất.</p>
+      </div>
+
+      {files.length === 0 ? (
+        <div style={{ padding: "60px", textAlign: "center", border: "2px dashed #cbd5e1", borderRadius: "12px", color: "#64748b", backgroundColor: "#f8fafc" }}>
+          Chưa có bài giảng nào trong hệ thống.
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "24px" }}>
+          {files.map((file: any) => (
+            <div key={file.id} style={{ border: "1px solid #e2e8f0", borderRadius: "16px", overflow: "hidden", backgroundColor: "#fff", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)" }}>
+              {/* Ảnh Demo */}
+              <div style={{ width: "100%", height: "200px", backgroundColor: "#e2e8f0", backgroundImage: `url(${file.imageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }}></div>
+              
+              <div style={{ padding: "20px" }}>
+                <h3 style={{ fontSize: "18px", color: "#0f172a", margin: "0 0 10px 0", lineHeight: "1.4" }}>📄 {file.title}</h3>
+                <p style={{ color: "#475569", fontSize: "14px", margin: "0 0 20px 0", lineHeight: "1.6", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  {file.description}
+                </p>
+                
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #f1f5f9", paddingTop: "16px" }}>
+                  <span style={{ fontSize: "13px", color: "#94a3b8", fontWeight: "500" }}>📅 {file.date}</span>
+                  <button onClick={() => alert("File tải xuống đã sẵn sàng!")} style={{ padding: "10px 20px", backgroundColor: "#10b981", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }}>
+                    ⬇️ Tải Về
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
-  </div>;
+  );
 }
