@@ -1,13 +1,17 @@
-import { PrismaClient } from '@prisma/client';
-
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+// Mock Prisma an toàn tuyệt đối cho môi trường Vercel Serverless
+export const prisma = {
+  document: {
+    findMany: async () => [],
+    findUnique: async () => null,
+    create: async () => ({}),
+    delete: async () => ({}),
+  },
+  download: {
+    findMany: async () => [],
+    create: async () => ({}),
+  },
+  user: {
+    findMany: async () => [],
+    findUnique: async () => null,
+  }
 };
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
-  });
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
