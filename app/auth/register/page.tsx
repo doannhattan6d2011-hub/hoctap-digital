@@ -9,7 +9,7 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -18,31 +18,53 @@ export default function RegisterPage() {
       return;
     }
 
-    try {
-      setLoading(true);
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || "Đăng ký không thành công!");
-      }
-
-      if (data.user) {
-        localStorage.setItem("user_info", JSON.stringify(data.user));
-      }
-
-      // Đăng ký thành công -> Chuyển về trang chủ
-      window.location.href = "/";
-    } catch (err: any) {
-      setError(err.message || "Có lỗi xảy ra khi đăng ký!");
-    } finally {
-      setLoading(false);
+    if (password.length < 6) {
+      setError("Mật khẩu tối thiểu phải có từ 6 ký tự!");
+      return;
     }
+
+    setLoading(true);
+
+    setTimeout(() => {
+      try {
+        const cleanEmail = email.toLowerCase().trim();
+        // Lấy danh sách đã đăng ký từ trình duyệt
+        const usersStr = localStorage.getItem("mock_users") || "[]";
+        const users = JSON.parse(usersStr);
+
+        // Chống đăng ký trùng lặp
+        const exists = users.find((u: any) => u.email === cleanEmail);
+        if (exists) {
+          setError("⚠️ Email này đã được đăng ký trước đó!");
+          setLoading(false);
+          return;
+        }
+
+        const isAdmin = cleanEmail.includes("admin") || cleanEmail.includes("phanthiphuong");
+
+        const newUser = {
+          username: cleanEmail.split("@")[0],
+          email: cleanEmail,
+          password: password,
+          role: isAdmin ? "admin" : "user",
+          name: cleanEmail.split("@")[0]
+        };
+
+        // Lưu tài khoản mới
+        users.push(newUser);
+        localStorage.setItem("mock_users", JSON.stringify(users));
+        
+        // Tự động đăng nhập
+        const loginInfo = { ...newUser };
+        delete (loginInfo as any).password; 
+        localStorage.setItem("user_info", JSON.stringify(loginInfo));
+        
+        window.location.href = "/";
+      } catch (err) {
+        setError("Lỗi xử lý đăng ký!");
+        setLoading(false);
+      }
+    }, 600);
   };
 
   return (
@@ -50,12 +72,12 @@ export default function RegisterPage() {
       <div style={{ backgroundColor: "#ffffff", padding: "32px", borderRadius: "16px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", width: "100%", maxWidth: "420px", border: "1px solid #e2e8f0" }}>
         
         <div style={{ textAlign: "center", marginBottom: "24px" }}>
-          <h2 style={{ fontSize: "22px", fontWeight: "800", color: "#0f172a" }}>Đăng Kỳ Tài Khoản</h2>
+          <h2 style={{ fontSize: "22px", fontWeight: "800", color: "#0f172a" }}>Đăng Ký Tài Khoản</h2>
         </div>
 
         {error && (
           <div style={{ color: "#dc2626", padding: "12px", backgroundColor: "#fef2f2", borderRadius: "8px", marginBottom: "16px", border: "1px solid #fecaca", fontSize: "14px" }}>
-            ⚠️ {error}
+            {error}
           </div>
         )}
 
@@ -78,7 +100,7 @@ export default function RegisterPage() {
               type="password" 
               value={password} 
               onChange={(e) => setPassword(e.target.value)} 
-              placeholder="Nhập mật khẩu..." 
+              placeholder="Mật khẩu (trên 6 ký tự)" 
               required
               style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "15px", boxSizing: "border-box" }} 
             />
