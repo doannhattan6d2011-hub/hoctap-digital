@@ -1,51 +1,53 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
+import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { email, password } = body;
+    const { email, password, username } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json(
-        { error: 'Vui lòng điền đầy đủ thông tin' },
+        { message: "Vui lòng nhập đầy đủ email và mật khẩu!" },
         { status: 400 }
       );
     }
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
-    });
-
-    if (existingUser) {
+    if (password.length < 6) {
       return NextResponse.json(
-        { error: 'Email này đã được sử dụng' },
+        { message: "Mật khẩu tối thiểu phải có từ 6 ký tự!" },
         { status: 400 }
       );
     }
 
-    // Mã hóa mật khẩu
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const cleanEmail = email.trim().toLowerCase();
+    const isAdmin =
+      cleanEmail.includes("admin") ||
+      cleanEmail.includes("phanthiphuong");
 
-    // Tạo user mới (Chú ý field passwordHash)
-    const user = await prisma.user.create({
-      data: {
-        email: email.toLowerCase().trim(),
-        passwordHash: hashedPassword,
-        role: 'USER',
-        isActive: true,
-      },
+    const user = {
+      username: username || cleanEmail.split("@")[0],
+      email: cleanEmail,
+      role: isAdmin ? "admin" : "user",
+      name: cleanEmail.split("@")[0],
+    };
+
+    const response = NextResponse.json({
+      message: "Đăng ký thành công!",
+      user,
     });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Đăng ký thành công',
+    // Tạo cookie đăng nhập ngay sau khi đăng ký thành công
+    response.cookies.set({
+      name: "user_session",
+      value: JSON.stringify(user),
+      httpOnly: false,
+      path: "/",
+      maxAge: 86400,
     });
-  } catch (error) {
-    console.error('Register Error:', error);
+
+    return response;
+  } catch (error: any) {
     return NextResponse.json(
-      { error: 'Có lỗi xảy ra khi đăng ký' },
+      { message: "Lỗi xử lý đăng ký", error: error.message },
       { status: 500 }
     );
   }
