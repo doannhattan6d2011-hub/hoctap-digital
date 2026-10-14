@@ -1,32 +1,78 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth";
+import { headObject, getObjectHeader } from "@/lib/storage";
+import { sameOrigin } from "@/lib/http";
+import { isAllowedFile } from "@/lib/validation";
 
 export async function POST(request: Request) {
-  try {
-    let title = "Bài giảng mới";
-    let filename = "document.pptx";
+  if (!sameOrigin(request)) {
+    return NextResponse.json({ message: "Yêu cầu không hợp lệ." }, { status: 403 });
+  }
 
-    // Phân tích dữ liệu siêu nhẹ gửi từ Frontend
-    try {
-      const text = await request.text();
-      if (text.startsWith("{")) {
-        const body = JSON.parse(text);
-        title = body.title || title;
-        filename = body.filename || filename;
-      }
-    } catch (e) {
-      console.warn("Bỏ qua lỗi dữ liệu đầu vào");
+  try {
+    const user = await requireAdmin();
+    const body = await request.json();
+
+    const title = String(body.title || "").trim();
+    const description = String(body.description || "").trim();
+    const originalName = String(body.originalName || "").trim();
+    const storageKey = String(body.key || "");
+    const mimeType = String(body.mimeType || "application/octet-stream");
+    const sizeBytes = Number(body.sizeBytes);
+    const subject = String(body.subject || "Chưa phân loại").trim();
+    const grade = String(body.grade || "Chưa phân loại").trim();
+
+    if (!title || !originalName || !storageKey.startsWith("documents/")) {
+      return NextResponse.json({ message: "Thiếu tên bài hoặc thông tin file." }, { status: 400 });
     }
 
-    const newDoc = {
-      id: Date.now().toString(),
-      title: title,
-      filename: filename,
-      downloadUrl: "#", // Trình diễn demo
-      createdAt: new Date().toISOString()
-    };
+    if (!isAllowedFile(originalName, sizeBytes)) {
+      return NextResponse.json({ message: "Chỉ nhận file PPT/PPTX trong giới hạn dung lượng." }, { status: 400 });
+    }
 
-    return NextResponse.json({ message: "Upload ảo thành công!", document: newDoc }, { status: 200 });
+    const object = await headObject(storageKey);
+    if (!object.ContentLength || object.ContentLength !== sizeBytes) {
+      return NextResponse.json({ message: "Dung lượng file trên Storage không khớp." }, { status: 400 });
+    }
+
+    const header = await getObjectHeader(storageKey, 8);
+    const isPptx = header[0] === 0x50 && header[1] === 0x4b;
+    const isPpt = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]).equals(header.subarray(0, 8));
+
+    if (!isPptx && !isPpt) {
+      return NextResponse.json({ message: "Nội dung file không phải PowerPoint hợp lệ." }, { status: 400 });
+    }
+
+    const document = await prisma.document.create({
+      data: {
+        title,
+        description: description || null,
+        subject,
+        grade,
+        originalName,
+        storageKey,
+        mimeType,
+        sizeBytes,
+        uploadedById: user.id,
+      },
+      select: {
+        id: true,
+        title: true,
+        originalName: true,
+        createdAt: true,
+      },
+    });
+
+    return NextResponse.json({ message: "Đã lưu tài liệu.", document }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ message: "Xử lý thành công!" }, { status: 200 });
+    const message = error instanceof Error ? error.message : "";
+
+    if (message === "UNAUTHORIZED" || message === "FORBIDDEN") {
+      return NextResponse.json({ message: "Tài khoản không có quyền đăng tài liệu." }, { status: 403 });
+    }
+
+    console.error("POST /api/admin/documents:", error);
+    return NextResponse.json({ message: "Không thể lưu thông tin tài liệu." }, { status: 500 });
   }
 }

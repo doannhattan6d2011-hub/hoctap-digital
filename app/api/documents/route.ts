@@ -1,34 +1,44 @@
-import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+﻿import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  // Dữ liệu dự phòng ép hiển thị ngay lập tức trên Vercel
-  const defaultDocs = [
-    {
-      id: "1791706944481",
-      title: "Bài Giảng: Cây Khế (Bản chuẩn)",
-      filename: "1791706944481-BaiGiang_CayKhe__1_.pptx",
-      downloadUrl: "/uploads/1791706944481-BaiGiang_CayKhe__1_.pptx",
-      createdAt: new Date().toISOString()
-    }
-  ];
-
   try {
-    const filePath = path.join(process.cwd(), "data", "documents.json");
-    
-    if (fs.existsSync(filePath)) {
-      const fileData = fs.readFileSync(filePath, "utf8");
-      const documents = JSON.parse(fileData || "[]");
-      // Nếu có dữ liệu thật thì hiện, nếu mảng rỗng thì hiện bản dự phòng
-      if (documents.length > 0) {
-        return NextResponse.json(documents);
+    const documents = await prisma.document.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        originalName: true,
+        subject: true,
+        grade: true,
+        createdAt: true,
+        downloadCount: true,
+      },
+    });
+
+    return NextResponse.json(
+      documents.map((doc) => ({
+        id: doc.id,
+        title: doc.title,
+        description: doc.description ?? "",
+        fileName: doc.originalName,
+        subject: doc.subject,
+        grade: doc.grade,
+        createdAt: doc.createdAt.toISOString(),
+        downloadCount: doc.downloadCount,
+      })),
+      {
+        headers: { "Cache-Control": "no-store" },
       }
-    }
-    
-    // Ép trả về danh sách có sẵn bài giảng Cây Khế
-    return NextResponse.json(defaultDocs);
+    );
   } catch (error) {
-    return NextResponse.json(defaultDocs, { status: 200 });
+    console.error("GET /api/documents:", error);
+    return NextResponse.json(
+      { message: "Không thể tải danh sách tài liệu." },
+      { status: 500 }
+    );
   }
 }

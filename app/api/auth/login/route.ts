@@ -1,102 +1,62 @@
+
 import { NextResponse } from "next/server";
-import { readFile } from "fs/promises";
-import path from "path";
-import fs from "fs";
+import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
+import { createSession } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
-    let body;
-    try {
-      body = await request.json();
-    } catch {
+    const body = await request.json();
+    const email = String(body.email || body.username || "")
+      .trim()
+      .toLowerCase();
+    const password = String(body.password || "");
+
+    if (!email || !password) {
       return NextResponse.json(
-        { message: "Dữ liệu gửi lên không hợp lệ!" },
+        { message: "Vui lòng nhập email và mật khẩu." },
         { status: 400 }
       );
     }
 
-    const { username, email, password } = body || {};
-    const inputUser = String(username || email || "").trim().toLowerCase();
-    const inputPass = String(password || "").trim();
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
 
-    if (!inputUser || !inputPass) {
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       return NextResponse.json(
-        { message: "Vui lòng nhập tài khoản/email và mật khẩu!" },
-        { status: 400 }
-      );
-    }
-
-    // 1. Đọc danh sách người dùng đã đăng ký từ file data/users.json
-    let registeredUsers: any[] = [];
-    try {
-      const usersFilePath = path.join(process.cwd(), "data", "users.json");
-      if (fs.existsSync(usersFilePath)) {
-        const content = await readFile(usersFilePath, "utf-8");
-        registeredUsers = JSON.parse(content || "[]");
-      }
-    } catch (e) {
-      console.warn("Không thể đọc file users.json:", e);
-    }
-
-    // 2. Tìm tài khoản trong cơ sở dữ liệu
-    let matchedUser = registeredUsers.find(
-      (u: any) =>
-        (u.email && u.email.toLowerCase() === inputUser) ||
-        (u.username && u.username.toLowerCase() === inputUser)
-    );
-
-    // 3. Nếu chưa đăng ký và cũng không phải tài khoản Admin đặc biệt
-    const isSpecialAdmin =
-      inputUser === "admin" || inputUser === "phanthiphuong1976";
-
-    if (!matchedUser && !isSpecialAdmin) {
-      return NextResponse.json(
-        { message: "Tài khoản chưa được đăng ký trong hệ thống!" },
+        { message: "Email hoặc mật khẩu không chính xác." },
         { status: 401 }
       );
     }
 
-    // 4. Kiểm tra mật khẩu (nếu là user đã đăng ký)
-    if (matchedUser && matchedUser.password && matchedUser.password !== inputPass) {
+    if (!user.isActive) {
       return NextResponse.json(
-        { message: "Mật khẩu không chính xác!" },
-        { status: 401 }
+        { message: "Tài khoản đã bị vô hiệu hóa." },
+        { status: 403 }
       );
     }
 
-    // 5. Chuẩn hóa thông tin người dùng đăng nhập
-    const user = matchedUser || {
-      id: Date.now().toString(),
-      username: inputUser,
-      email: inputUser.includes("@") ? inputUser : `${inputUser}@system.local`,
-      role: isSpecialAdmin ? "admin" : "user",
-      name: inputUser,
-    };
+    await createSession(user.id);
 
-    const response = NextResponse.json({
-      message: "Đăng nhập thành công!",
+    const displayName = user.email.split("@")[0];
+
+    return NextResponse.json({
+      message: "Đăng nhập thành công.",
       user: {
         id: user.id,
-        username: user.username,
         email: user.email,
-        role: user.role,
-        name: user.name || user.username,
+        username: displayName,
+        name: displayName,
+        role: user.role.toLowerCase(),
+        emailVerified: Boolean(user.emailVerifiedAt),
       },
     });
+  } catch (error) {
+    console.error("POST /api/auth/login:", error);
 
-    // Lưu Cookie phiên làm việc
-    response.cookies.set({
-      name: "user_session",
-      value: JSON.stringify(user),
-      httpOnly: false,
-      path: "/",
-      maxAge: 86400,
-    });
-
-    return response;
-  } catch (error: any) {
     return NextResponse.json(
-      { message: "Lỗi hệ thống khi đăng nhập", error: error?.message || String(error) },
+      { message: "Lỗi hệ thống khi đăng nhập." },
       { status: 500 }
     );
   }

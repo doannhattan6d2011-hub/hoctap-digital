@@ -1,95 +1,88 @@
+
 import { NextResponse } from "next/server";
-import { readFile, writeFile, mkdir } from "fs/promises";
-import path from "path";
-import fs from "fs";
+import bcrypt from "bcryptjs";
+import { randomToken, hashToken } from "@/lib/security";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
   try {
-    let body;
-    try {
-      body = await request.json();
-    } catch {
+    const body = await request.json();
+    const email = String(body.email || "").trim().toLowerCase();
+    const password = String(body.password || "");
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json(
-        { message: "Dữ liệu gửi lên không hợp lệ!" },
+        { message: "Email không hợp lệ." },
         { status: 400 }
       );
     }
 
-    const { email, password, username } = body || {};
-
-    if (!email || !password) {
+    if (password.length < 6) {
       return NextResponse.json(
-        { message: "Vui lòng nhập đầy đủ Email và Mật khẩu!" },
+        { message: "Mật khẩu phải có ít nhất 6 ký tự." },
         { status: 400 }
       );
     }
 
-    const cleanEmail = String(email).trim().toLowerCase();
-    const cleanUsername = username ? String(username).trim() : cleanEmail.split("@")[0];
+    const existing = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
 
-    const isAdmin =
-      cleanEmail.includes("admin") ||
-      cleanEmail.includes("phanthiphuong");
-
-    const newUser = {
-      id: Date.now().toString(),
-      username: cleanUsername,
-      email: cleanEmail,
-      password: String(password).trim(), // Lưu mật khẩu xác thực
-      role: isAdmin ? "admin" : "user",
-      name: cleanUsername,
-      createdAt: new Date().toISOString(),
-    };
-
-    try {
-      const dataDir = path.join(process.cwd(), "data");
-      if (!fs.existsSync(dataDir)) {
-        await mkdir(dataDir, { recursive: true });
-      }
-      const usersFilePath = path.join(dataDir, "users.json");
-      let users = [];
-      if (fs.existsSync(usersFilePath)) {
-        const content = await readFile(usersFilePath, "utf-8");
-        users = JSON.parse(content || "[]");
-      }
-
-      const existing = users.find((u: any) => u.email === cleanEmail);
-      if (existing) {
-        return NextResponse.json(
-          { message: "Email này đã được đăng ký trước đó!" },
-          { status: 400 }
-        );
-      }
-
-      users.push(newUser);
-      await writeFile(usersFilePath, JSON.stringify(users, null, 2), "utf-8");
-    } catch (fsError) {
-      console.warn("Lưu file users.json:", fsError);
+    if (existing) {
+      return NextResponse.json(
+        { message: "Email đã được đăng ký." },
+        { status: 409 }
+      );
     }
 
-    const response = NextResponse.json({
-      message: "Đăng ký tài khoản thành công!",
-      user: {
-        id: newUser.id,
-        username: newUser.username,
-        email: newUser.email,
-        role: newUser.role,
-        name: newUser.name,
+    const passwordHash = await bcrypt.hash(password, 12);
+    const rawToken = randomToken(32);
+    const tokenHash = hashToken(rawToken);
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        role: "USER",
+        verificationTokens: {
+          create: {
+            tokenHash,
+            expiresAt,
+          },
+        },
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
       },
     });
 
-    response.cookies.set({
-      name: "user_session",
-      value: JSON.stringify(newUser),
-      httpOnly: false,
-      path: "/",
-      maxAge: 86400,
-    });
+    // Không tự đăng nhập tài khoản chưa xác minh email.
+    // Token được trả về chỉ để kiểm thử luồng xác minh trong môi trường phát triển.
+    const responseBody: {
+      message: string;
+      user: typeof user;
+      verificationUrl?: string;
+    } = {
+      message: "Đăng ký thành công. Hãy xác minh email trước khi đăng nhập.",
+      user,
+    };
 
-    return response;
-  } catch (error: any) {
+    if (process.env.NODE_ENV !== "production") {
+      const baseUrl = new URL(request.url).origin;
+      responseBody.verificationUrl =
+        `${baseUrl}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}`;
+    }
+
+    return NextResponse.json(responseBody, { status: 201 });
+  } catch (error) {
+    console.error("POST /api/auth/register:", error);
+
     return NextResponse.json(
-      { message: "Lỗi xử lý đăng ký", error: error?.message || String(error) },
+      { message: "Không thể đăng ký tài khoản." },
       { status: 500 }
     );
   }

@@ -178,7 +178,33 @@ export default function HomePage() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setFiles(Database.getDocuments());
+    fetch("/api/documents", { cache: "no-store" })
+  .then(async (response) => {
+    if (!response.ok) throw new Error("Không tải được danh sách tài liệu");
+    return response.json();
+  })
+  .then((documents) => {
+    setFiles(
+      documents.map((doc: {
+        id: string;
+        title: string;
+        description?: string;
+        fileName: string;
+        createdAt: string;
+      }) => ({
+        id: doc.id,
+        title: doc.title,
+        description: doc.description ?? "",
+        imageUrl: "",
+        fileName: doc.fileName,
+        createdAt: doc.createdAt,
+      }))
+    );
+  })
+  .catch((error) => {
+    console.error("Lỗi tải danh sách:", error);
+    setToast({ msg: "Không tải được danh sách tài liệu.", type: "error" });
+  });
     setUsers(Database.getUsers());
     setMounted(true);
 
@@ -214,25 +240,15 @@ export default function HomePage() {
 
   // Xử lý Tải File an toàn
   const handleDownload = (doc: DocumentItem) => {
-    try {
-      if (doc.fileData) {
-        const link = document.createElement("a");
-        link.href = doc.fileData; link.download = doc.fileName;
-        document.body.appendChild(link); link.click(); document.body.removeChild(link);
-      } else {
-        const fileContent = `Nội dung giả lập hệ thống cho file: ${doc.fileName}`;
-        const blob = new Blob([fileContent], { type: "application/octet-stream" });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url; link.download = doc.fileName;
-        document.body.appendChild(link); link.click();
-        document.body.removeChild(link); window.URL.revokeObjectURL(url);
-      }
-      setToast({ msg: `Đã tải xuống thành công: ${doc.fileName}`, type: 'success' });
-    } catch {
-      setToast({ msg: 'Có lỗi xảy ra khi tải file!', type: 'error' });
-    }
-  };
+  if (!doc.id) {
+    setToast({ msg: "Tài liệu không có mã hợp lệ.", type: "error" });
+    return;
+  }
+
+  window.location.assign(
+    `/api/download?id=${encodeURIComponent(doc.id)}`
+  );
+};
 
   const handleLogout = () => {
     localStorage.removeItem("user_info");
