@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -12,7 +12,10 @@ export default function AdminUsersPage() {
   }, []);
 
   const fetchUsers = async () => {
-    const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
     if (data) setUsers(data);
   };
 
