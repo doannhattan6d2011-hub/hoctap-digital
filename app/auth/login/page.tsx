@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function Login() {
-  const router = router = useRouter();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -27,13 +27,11 @@ export default function Login() {
       return alert("❌ Email hoặc mật khẩu không chính xác!");
     }
 
-    // Tự động gán quyền Admin nếu là tài khoản admin hoặc email chứa phanthiphuong
     if (cleanEmail.includes("admin") || cleanEmail.includes("phanthiphuong")) {
       data.role = "admin";
       data.username = "Phan Thị Phương";
     }
 
-    // Lưu phiên làm việc thống nhất
     localStorage.setItem("phanthiphuong_user", JSON.stringify(data));
 
     if (data.role === 'admin') {
