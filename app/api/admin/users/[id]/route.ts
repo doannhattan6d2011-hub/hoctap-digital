@@ -1,0 +1,4 @@
+import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth";
+import { sameOrigin } from "@/lib/http";
+export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){if(!sameOrigin(request))return Response.json({error:"Invalid origin"},{status:403});try{const admin=await requireAdmin();const {id}=await params;if(id===admin.id)return Response.json({error:"Không tự khóa tài khoản admin"},{status:400});const active=Boolean((await request.json()).isActive);const user=await prisma.user.update({where:{id},data:{isActive:active}});if(!active)await prisma.session.deleteMany({where:{userId:id}});return Response.json({user:{id:user.id,email:user.email,isActive:user.isActive}})}catch{return Response.json({error:"Không có quyền hoặc người dùng không tồn tại"},{status:400})}}
