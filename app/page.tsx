@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
@@ -10,18 +11,21 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchDocuments();
-    const storedUser = localStorage.getItem("pan_user");
-    if (storedUser) setUser(JSON.parse(storedUser));
+    const storedUser = localStorage.getItem("phanthiphuong_user");
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {}
+    }
   }, []);
 
   const fetchDocuments = async () => {
-    const { data, error } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
-    if (!error && data) setFiles(data);
+    const { data } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
+    if (data) setFiles(data);
   };
 
   const handleDownload = async (fileUrl: string, fileName: string) => {
     try {
-      // Tải file nhị phân trực tiếp từ Cloud để đảm bảo 100% không hỏng file
       const response = await fetch(fileUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -33,23 +37,23 @@ export default function HomePage() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      alert("Lỗi bảo mật hoặc mạng khi tải file!");
+      alert("Lỗi khi tải tệp xuống!");
     }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("pan_user");
+    localStorage.removeItem("phanthiphuong_user");
     window.location.reload();
   };
 
   const filteredFiles = files.filter(f => f.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div style={{ minHeight: "100vh", fontFamily: "sans-serif" }}>
+    <div style={{ minHeight: "100vh", fontFamily: "sans-serif", backgroundColor: "#f8fafc" }}>
       {/* HEADER */}
-      <header style={{ background: "rgba(255, 255, 255, 0.9)", backdropFilter: "blur(10px)", padding: "16px 40px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 50, borderBottom: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)" }}>
-        <h1 style={{ fontSize: "24px", fontWeight: "900", margin: 0, color: "#1e40af", letterSpacing: "-0.5px" }}>
-          🌟 PAN THỊ PHƯƠNG
+      <header style={{ background: "white", padding: "16px 40px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 50, borderBottom: "1px solid #e2e8f0", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}>
+        <h1 style={{ fontSize: "24px", fontWeight: "900", margin: 0, color: "#1e40af" }}>
+          🌟 PHAN THỊ PHƯƠNG
         </h1>
         <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
           {!user ? (
@@ -59,38 +63,44 @@ export default function HomePage() {
             </>
           ) : (
             <>
-              <span style={{ fontWeight: "bold", color: "#334155" }}>Xin chào, {user.username}</span>
+              <span style={{ fontWeight: "bold", color: "#334155" }}>👋 Xin chào, {user.username || user.name}</span>
               {user.role === 'admin' && (
-                <Link href="/admin" style={{ background: "#10b981", color: "white", padding: "8px 16px", borderRadius: "6px", textDecoration: "none", fontWeight: "bold" }}>Khu Vực Quản Trị</Link>
+                <Link href="/admin" style={{ background: "#10b981", color: "white", padding: "8px 16px", borderRadius: "6px", textDecoration: "none", fontWeight: "bold" }}>
+                  ⚙️ Khu Vực Quản Trị
+                </Link>
               )}
-              <button onClick={handleLogout} style={{ background: "#ef4444", color: "white", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer", fontWeight: "bold" }}>Đăng Xuất</button>
+              <button onClick={handleLogout} style={{ background: "#ef4444", color: "white", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer", fontWeight: "bold" }}>
+                Đăng Xuất
+              </button>
             </>
           )}
         </div>
       </header>
 
-      {/* HERO & SEARCH */}
-      <div style={{ background: "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)", padding: "80px 20px", textAlign: "center" }}>
-        <h2 style={{ fontSize: "48px", fontWeight: "900", color: "#0f172a", marginBottom: "20px" }}>Kho Học Liệu Số Cao Cấp</h2>
-        <p style={{ fontSize: "18px", color: "#475569", marginBottom: "40px" }}>Hệ thống lưu trữ và bảo mật tài liệu giảng dạy độc quyền.</p>
+      {/* TÌM KIẾM */}
+      <div style={{ background: "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)", padding: "60px 20px", textAlign: "center" }}>
+        <h2 style={{ fontSize: "40px", fontWeight: "900", color: "#0f172a", marginBottom: "16px" }}>Kho Học Liệu Số Phan Thị Phương</h2>
+        <p style={{ fontSize: "16px", color: "#475569", marginBottom: "30px" }}>Hệ thống lưu trữ bài giảng và tài liệu học tập trực tuyến.</p>
         <input 
           type="text" 
           placeholder="🔍 Tìm kiếm bài giảng..." 
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ width: "100%", maxWidth: "600px", padding: "16px 24px", borderRadius: "50px", border: "1px solid #cbd5e1", fontSize: "16px", outline: "none", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }}
+          style={{ width: "100%", maxWidth: "500px", padding: "16px 24px", borderRadius: "50px", border: "1px solid #cbd5e1", fontSize: "16px", outline: "none", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)" }}
         />
       </div>
 
-      {/* MAIN CONTENT */}
-      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "60px 20px" }}>
+      {/* DANH SÁCH BÀI HỌC */}
+      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "40px 20px" }}>
         {filteredFiles.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>Không có tài liệu nào phù hợp.</div>
+          <div style={{ textAlign: "center", padding: "60px", color: "#64748b", background: "white", borderRadius: "12px", border: "1px dashed #cbd5e1" }}>
+            Chưa có bài giảng nào trong hệ thống.
+          </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "30px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "24px" }}>
             {filteredFiles.map((file) => (
-              <div key={file.id} style={{ background: "white", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 4px 6px rgba(0,0,0,0.05)", transition: "0.3s" }} onMouseOver={e => e.currentTarget.style.transform = 'translateY(-5px)'} onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}>
-                <div style={{ height: "200px", backgroundImage: `url(${file.image_url || 'https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=800'})`, backgroundSize: "cover", backgroundPosition: "center" }}></div>
+              <div key={file.id} style={{ background: "white", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 4px 6px rgba(0,0,0,0.03)" }}>
+                <div style={{ height: "180px", backgroundImage: `url(${file.image_url || 'https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=800'})`, backgroundSize: "cover", backgroundPosition: "center" }}></div>
                 <div style={{ padding: "20px", display: "flex", flexDirection: "column", flex: 1 }}>
                   <h3 style={{ fontSize: "18px", fontWeight: "800", color: "#0f172a", margin: "0 0 10px 0" }}>{file.title}</h3>
                   <p style={{ color: "#64748b", fontSize: "14px", lineHeight: "1.6", margin: "0 0 20px 0", flex: 1 }}>{file.description}</p>
