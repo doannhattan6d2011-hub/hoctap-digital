@@ -1,140 +1,290 @@
 ﻿"use client";
 
-import { FormEvent, Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
-function ResetPasswordForm() {
-  const searchParams = useSearchParams();
-  const token = searchParams.get("token") || "";
+// ============================================================================
+// 1. STYLESHEET CHI TIẾT TRANG ĐỔI MẬT KHẨU
+// ============================================================================
+const ChangePassStyles = () => (
+  <style dangerouslySetInnerHTML={{ __html: `
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+    
+    * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
+    body { background-color: #f8fafc; color: #0f172a; margin: 0; padding: 0; }
 
-  const [password, setPassword] = useState("");
+    .cp-wrapper {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    }
+
+    .cp-card {
+      background: #ffffff;
+      width: 100%;
+      max-width: 480px;
+      border-radius: 24px;
+      padding: 48px 40px;
+      box-shadow: 0 20px 30px -10px rgba(37, 99, 235, 0.1);
+      border: 1px solid #e2e8f0;
+    }
+
+    .cp-title {
+      font-size: 26px;
+      font-weight: 900;
+      color: #1e3a8a;
+      margin: 0 0 8px 0;
+      text-align: center;
+    }
+
+    .cp-subtitle {
+      font-size: 14px;
+      color: #64748b;
+      margin: 0 0 32px 0;
+      text-align: center;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 800;
+      color: #334155;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .input-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 16px 44px 16px 18px;
+      border-radius: 12px;
+      border: 1px solid #cbd5e1;
+      font-size: 15px;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .form-input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    }
+
+    .toggle-eye {
+      position: absolute;
+      right: 14px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 18px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      margin-top: 12px;
+      transition: all 0.2s;
+    }
+    .btn-submit:hover:not(:disabled) {
+      background: #1d4ed8;
+      transform: translateY(-2px);
+    }
+
+    .alert {
+      padding: 14px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+    .alert-err { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .alert-ok { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+  `}} />
+);
+
+// ============================================================================
+// 2. MAIN COMPONENT: ĐỔI MẬT KHẨU
+// ============================================================================
+export default function ChangePasswordPage() {
+  const router = useRouter();
+
+  const [user, setUser] = useState<any>(null);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    const stored = localStorage.getItem("phanthiphuong_user");
+    if (!stored) {
+      alert("Bạn chưa đăng nhập!");
+      router.push("/auth/login");
+      return;
+    }
+    try {
+      setUser(JSON.parse(stored));
+    } catch {
+      router.push("/auth/login");
+    }
+  }, [router]);
+
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage("");
-    setError("");
+    setErrorMsg(""); setSuccessMsg("");
 
-    if (!token) {
-      setError("Liên kết đặt lại mật khẩu không hợp lệ hoặc đã thiếu mã token.");
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      setErrorMsg("Vui lòng nhập đầy đủ các trường.");
       return;
     }
 
-    if (password.length < 12) {
-      setError("Mật khẩu mới phải có ít nhất 12 ký tự.");
+    if (newPassword !== confirmPassword) {
+      setErrorMsg("Mật khẩu mới và Nhập lại mật khẩu không khớp nhau!");
       return;
     }
 
-    if (password !== confirmPassword) {
-      setError("Mật khẩu nhập lại không khớp.");
+    if (newPassword.length < 6) {
+      setErrorMsg("Mật khẩu mới phải có tối thiểu 6 ký tự.");
       return;
     }
 
     setLoading(true);
 
     try {
-      const response = await fetch("/api/auth/reset-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password }),
-      });
+      // 1. Kiểm tra mật khẩu cũ trên Database
+      const { data, error: fetchErr } = await supabase
+        .from("profiles")
+        .select("password")
+        .eq("id", user.id)
+        .single();
 
-      const data = await response.json();
+      if (fetchErr || !data) {
+        throw new Error("Không tìm thấy dữ liệu người dùng.");
+      }
 
-      if (!response.ok) {
-        setError(data.error || "Không thể đặt lại mật khẩu.");
+      if (data.password && data.password !== oldPassword) {
+        setErrorMsg("❌ Mật khẩu hiện tại không chính xác!");
+        setLoading(false);
         return;
       }
 
-      setMessage("Đặt lại mật khẩu thành công. Bạn có thể đăng nhập bằng mật khẩu mới.");
-      setPassword("");
-      setConfirmPassword("");
-    } catch {
-      setError("Không thể kết nối tới máy chủ.");
-    } finally {
+      // 2. Cập nhật mật khẩu mới vào Database
+      const { error: updateErr } = await supabase
+        .from("profiles")
+        .update({ password: newPassword })
+        .eq("id", user.id);
+
+      if (updateErr) throw updateErr;
+
+      // 3. Cập nhật LocalStorage Session
+      const updatedUser = { ...user, password: newPassword };
+      localStorage.setItem("phanthiphuong_user", JSON.stringify(updatedUser));
+
+      setSuccessMsg("🎉 Đổi mật khẩu thành công! Đang quay lại trang chủ...");
+      setTimeout(() => {
+        router.push("/");
+      }, 1500);
+
+    } catch (err: any) {
+      setErrorMsg(err.message || "Lỗi không xác định khi cập nhật mật khẩu.");
       setLoading(false);
     }
-  }
+  };
 
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm">
-        <h1 className="text-3xl font-bold text-slate-900">Đặt lại mật khẩu</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Tạo mật khẩu mới cho tài khoản của bạn.
-        </p>
+    <>
+      <ChangePassStyles />
+      <div className="cp-wrapper">
+        <div className="cp-card">
+          <h1 className="cp-title">🔐 Đổi Mật Khẩu Cá Nhân</h1>
+          <p className="cp-subtitle">Tài khoản: <strong>{user?.email}</strong></p>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium">Mật khẩu mới</label>
-            <input
-              type="password"
-              required
-              minLength={12}
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-slate-600"
-              placeholder="Ít nhất 12 ký tự"
-            />
-          </div>
+          {errorMsg && <div className="alert alert-err">⚠️ {errorMsg}</div>}
+          {successMsg && <div className="alert alert-ok">✅ {successMsg}</div>}
 
-          <div>
-            <label className="mb-1 block text-sm font-medium">Nhập lại mật khẩu</label>
-            <input
-              type="password"
-              required
-              minLength={12}
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-slate-600"
-              placeholder="Nhập lại mật khẩu"
-            />
-          </div>
-
-          {error && (
-            <div role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
-              {error}
+          <form onSubmit={handleChangePasswordSubmit}>
+            <div className="form-group">
+              <label className="form-label">Mật khẩu hiện tại</label>
+              <div className="input-box">
+                <input
+                  type={showOld ? "text" : "password"}
+                  className="form-input"
+                  placeholder="Nhập mật khẩu cũ..."
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  required
+                />
+                <button type="button" className="toggle-eye" onClick={() => setShowOld(!showOld)}>
+                  {showOld ? "🙈" : "👁️"}
+                </button>
+              </div>
             </div>
-          )}
 
-          {message && (
-            <div role="status" className="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">
-              {message}
+            <div className="form-group">
+              <label className="form-label">Mật khẩu mới</label>
+              <div className="input-box">
+                <input
+                  type={showNew ? "text" : "password"}
+                  className="form-input"
+                  placeholder="Nhập mật khẩu mới (ít nhất 6 ký tự)..."
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                />
+                <button type="button" className="toggle-eye" onClick={() => setShowNew(!showNew)}>
+                  {showNew ? "🙈" : "👁️"}
+                </button>
+              </div>
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-slate-900 px-4 py-3 font-semibold text-white disabled:opacity-50"
-          >
-            {loading ? "Đang xử lý..." : "Đặt lại mật khẩu"}
-          </button>
-        </form>
+            <div className="form-group">
+              <label className="form-label">Nhập lại mật khẩu mới</label>
+              <input
+                type="password"
+                className="form-input"
+                placeholder="Xác nhận mật khẩu mới..."
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </div>
 
-        <a href="/auth/login" className="mt-5 block text-center text-sm text-slate-600 hover:underline">
-          ← Quay lại đăng nhập
-        </a>
+            <button type="submit" className="btn-submit" disabled={loading}>
+              {loading ? "⏳ Đang cập nhật..." : "💾 LƯU MẬT KHẨU MỚI"}
+            </button>
+          </form>
+
+          <div style={{ textAlign: "center", marginTop: "24px" }}>
+            <Link href="/" style={{ color: "#64748b", fontWeight: "700", textDecoration: "none" }}>
+              🏠 Trở về Trang chủ
+            </Link>
+          </div>
+        </div>
       </div>
-    </main>
-  );
-}
-
-export default function ResetPasswordPage() {
-  return (
-    <Suspense
-      fallback={
-        <main className="min-h-screen flex items-center justify-center">
-          Đang tải trang đặt lại mật khẩu...
-        </main>
-      }
-    >
-      <ResetPasswordForm />
-    </Suspense>
+    </>
   );
 }

@@ -1,426 +1,248 @@
 ﻿"use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
 // ============================================================================
-// 1. STYLESHEET CHI TIẾT CHO TRANG UPLOAD (ADMIN)
+// 1. DANH SÁCH PHÂN LOẠI CỐ ĐỊNH (LỚP & MÔN)
 // ============================================================================
-const UploadStyles = () => (
+const GRADES = ["Lớp 6", "Lớp 7", "Lớp 8", "Lớp 9", "Khối THPT", "Tài Liệu Chung"];
+const CATEGORIES = [
+  "Ngữ Văn", 
+  "GDĐP (Giáo Dục Địa Phương)", 
+  "Mỹ Thuật", 
+  "Bài Giảng Thi Giáo Viên Giỏi", 
+  "Tài Liệu Học Sinh Chuẩn Bị", 
+  "Đề Thi & Kiểm Tra",
+  "Khác"
+];
+
+// ============================================================================
+// 2. STYLESHEET SIÊU ĐẸP CHO KHU VỰC UPLOAD
+// ============================================================================
+const AdminUploadStyles = () => (
   <style dangerouslySetInnerHTML={{ __html: `
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
     
     * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
     body { background-color: #f1f5f9; color: #0f172a; margin: 0; padding: 0; }
 
-    .upload-layout {
-      min-height: 100vh;
-      padding: 40px 24px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
+    .upload-wrapper { min-height: 100vh; padding: 60px 24px; display: flex; justify-content: center; }
+    .upload-card { width: 100%; max-width: 900px; background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; padding: 48px; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.05); }
 
-    .upload-container {
-      width: 100%;
-      max-width: 800px;
-      background: #ffffff;
-      border-radius: 20px;
-      border: 1px solid #e2e8f0;
-      padding: 40px;
-      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05);
-    }
+    .upload-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 2px solid #f1f5f9; }
+    .upload-title { font-size: 28px; font-weight: 900; color: #1e3a8a; margin: 0 0 8px 0; }
+    .upload-subtitle { font-size: 15px; color: #64748b; margin: 0; }
+    .btn-cancel { background: #f8fafc; color: #475569; padding: 12px 24px; border-radius: 12px; text-decoration: none; font-weight: 800; border: 1px solid #cbd5e1; transition: 0.2s; }
+    .btn-cancel:hover { background: #e2e8f0; color: #0f172a; }
 
-    .upload-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 32px;
-      padding-bottom: 24px;
-      border-bottom: 2px solid #f1f5f9;
-    }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+    .form-group { margin-bottom: 24px; }
+    .form-group.full-width { grid-column: 1 / -1; }
 
-    .upload-title {
-      font-size: 26px;
-      font-weight: 900;
-      color: #1e3a8a;
-      margin: 0 0 4px 0;
+    .form-label { display: block; font-size: 14px; font-weight: 800; color: #1e293b; margin-bottom: 10px; }
+    
+    .form-input, .form-select, .form-textarea {
+      width: 100%; padding: 16px 20px; border-radius: 12px; border: 1px solid #cbd5e1;
+      font-size: 15px; color: #0f172a; background: #f8fafc; transition: all 0.2s; outline: none;
     }
+    .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: #2563eb; background: #ffffff; box-shadow: 0 0 0 4px rgba(37,99,235,0.1); }
+    .form-textarea { min-height: 120px; resize: vertical; }
 
-    .upload-subtitle {
-      font-size: 14px;
-      color: #64748b;
-      margin: 0;
+    .dropzone {
+      border: 2px dashed #94a3b8; border-radius: 16px; padding: 48px 24px; text-align: center;
+      background: #f8fafc; cursor: pointer; transition: 0.3s; position: relative;
     }
-
-    .btn-back {
-      background: #f1f5f9;
-      color: #334155;
-      padding: 10px 18px;
-      border-radius: 10px;
-      text-decoration: none;
-      font-weight: 700;
-      font-size: 14px;
-      transition: all 0.2s;
-      border: 1px solid #e2e8f0;
-    }
-    .btn-back:hover {
-      background: #e2e8f0;
-      color: #0f172a;
-    }
-
-    .form-group {
-      margin-bottom: 24px;
-    }
-
-    .form-label {
-      display: block;
-      font-size: 14px;
-      font-weight: 800;
-      color: #1e293b;
-      margin-bottom: 8px;
-    }
-
-    .form-input, .form-textarea {
-      width: 100%;
-      padding: 16px;
-      border-radius: 12px;
-      border: 1px solid #cbd5e1;
-      font-size: 15px;
-      color: #0f172a;
-      background: #f8fafc;
-      transition: all 0.2s ease;
-      outline: none;
-    }
-    .form-input:focus, .form-textarea:focus {
-      border-color: #2563eb;
-      background: #ffffff;
-      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
-    }
-
-    .form-textarea {
-      resize: vertical;
-      min-height: 120px;
-    }
-
-    .file-drop-area {
-      border: 2px dashed #94a3b8;
-      border-radius: 16px;
-      padding: 40px 20px;
-      text-align: center;
-      background: #f8fafc;
-      transition: all 0.2s ease;
-      cursor: pointer;
-      position: relative;
-    }
-    .file-drop-area:hover, .file-drop-area.active {
-      border-color: #2563eb;
-      background: #eff6ff;
-    }
-
-    .file-input-hidden {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      cursor: pointer;
-    }
-
-    .file-icon {
-      font-size: 40px;
-      margin-bottom: 12px;
-      display: block;
-    }
-
-    .file-name-display {
-      margin-top: 12px;
-      padding: 12px;
-      background: #e0f2fe;
-      color: #0369a1;
-      border-radius: 8px;
-      font-weight: 700;
-      font-size: 14px;
-      display: inline-block;
-      border: 1px solid #bae6fd;
-    }
-
+    .dropzone:hover { border-color: #2563eb; background: #eff6ff; }
+    .drop-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+    .drop-icon { font-size: 48px; margin-bottom: 16px; display: block; }
+    .drop-title { font-size: 18px; font-weight: 800; color: #0f172a; margin-bottom: 8px; }
+    .drop-desc { font-size: 14px; color: #64748b; }
+    
+    .file-selected { background: #e0f2fe; border: 2px solid #38bdf8; border-radius: 16px; padding: 32px; text-align: center; position: relative; }
+    .file-name { font-size: 18px; font-weight: 800; color: #0369a1; margin-bottom: 8px; word-break: break-all; }
+    .file-size { font-size: 14px; color: #0284c7; font-weight: 600; }
+    
     .btn-submit {
-      width: 100%;
-      padding: 18px;
-      background: #2563eb;
-      color: white;
-      border: none;
-      border-radius: 12px;
-      font-size: 16px;
-      font-weight: 900;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      margin-top: 16px;
+      width: 100%; padding: 20px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white;
+      border: none; border-radius: 16px; font-size: 18px; font-weight: 900; cursor: pointer;
+      margin-top: 32px; transition: 0.3s; display: flex; justify-content: center; align-items: center; gap: 12px;
     }
-    .btn-submit:hover:not(:disabled) {
-      background: #1d4ed8;
-      transform: translateY(-2px);
-      box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
-    }
-    .btn-submit:disabled {
-      background: #94a3b8;
-      cursor: not-allowed;
-    }
+    .btn-submit:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 15px 25px -5px rgba(37,99,235,0.4); }
+    .btn-submit:disabled { background: #94a3b8; cursor: not-allowed; transform: none; box-shadow: none; }
 
-    .alert {
-      padding: 16px;
-      border-radius: 12px;
-      margin-bottom: 24px;
-      font-weight: 600;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .alert-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
-    .alert-success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    .status-alert { padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 15px; margin-bottom: 24px; }
+    .status-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .status-success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
   `}} />
 );
 
 // ============================================================================
-// 2. MAIN COMPONENT: UPLOAD PAGE
+// 3. MAIN COMPONENT: XỬ LÝ UPLOAD VÀ LƯU DATABASE
 // ============================================================================
-export default function AdminUploadPage() {
+export default function UploadDocumentPage() {
   const router = useRouter();
   
-  // States quản lý Form
+  // Dữ liệu Form
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [grade, setGrade] = useState(GRADES[0]);
+  const [category, setCategory] = useState(CATEGORIES[0]);
   const [imageUrl, setImageUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  
-  // States quản lý trạng thái tải lên
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
-  const [progressText, setProgressText] = useState("");
 
-  // Kiểm tra quyền Admin
+  // Trạng thái hệ thống
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  // Xác thực Admin
   useEffect(() => {
-    const stored = localStorage.getItem("phanthiphuong_user");
-    if (!stored) {
-      router.push("/auth/login");
-      return;
-    }
-    try {
-      const user = JSON.parse(stored);
-      if (user.role !== "admin" && !user.email.includes("admin")) {
-        alert("⚠️ Bạn không có quyền Đăng tải tài liệu!");
-        router.push("/");
-      }
-    } catch {
-      router.push("/auth/login");
+    const userStr = localStorage.getItem("phanthiphuong_user");
+    if (!userStr) { router.push("/auth/login"); return; }
+    const user = JSON.parse(userStr);
+    if (user.role !== "admin") {
+      alert("Chỉ Admin mới có quyền tải lên!");
+      router.push("/");
     }
   }, [router]);
 
-  // Xử lý khi chọn file
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      // Giới hạn file < 50MB (Tùy chỉnh nếu cần)
-      if (selectedFile.size > 50 * 1024 * 1024) {
-        setErrorMsg("Kích thước file quá lớn (Vượt quá 50MB). Vui lòng chọn file nhỏ hơn.");
+  const handleFileDrop = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (selected) {
+      if (selected.size > 100 * 1024 * 1024) {
+        setError("File quá lớn. Vui lòng chọn file dưới 100MB.");
         setFile(null);
-        return;
+      } else {
+        setFile(selected);
+        setError("");
       }
-      setFile(selectedFile);
-      setErrorMsg("");
     }
   };
 
-  // Xử lý Gửi Form
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg("");
-    setSuccessMsg("");
+    setError(""); setSuccess("");
 
     if (!title || !description || !file) {
-      setErrorMsg("Vui lòng điền đủ Tên bài giảng, Mô tả và Chọn File đính kèm.");
+      setError("Vui lòng điền đủ Tên, Mô tả và chọn File đính kèm.");
       return;
     }
 
     setLoading(true);
 
     try {
-      // 1. TẢI FILE LÊN SUPABASE STORAGE
-      setProgressText("Đang tải file lên kho lưu trữ đám mây...");
-      
+      // 1. Đẩy file lên Supabase Storage
       const fileExt = file.name.split('.').pop();
-      const safeFileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `documents/${safeFileName}`;
-
+      const safeName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      
       const { error: uploadError } = await supabase.storage
         .from('panthiphuong_files')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
+        .upload(`documents/${safeName}`, file);
 
-      if (uploadError) {
-        throw new Error(`Lỗi Storage: ${uploadError.message}. Vui lòng kiểm tra lại SQL Permissions.`);
-      }
+      if (uploadError) throw new Error("Lỗi Upload Storage: " + uploadError.message);
 
-      // 2. LẤY LINK TẢI XUỐNG PUBLIC URL
-      setProgressText("Đang tạo liên kết tải xuống an toàn...");
-      const { data: publicUrlData } = supabase.storage
+      // 2. Lấy link tải bảo mật
+      const { data: { publicUrl } } = supabase.storage
         .from('panthiphuong_files')
-        .getPublicUrl(filePath);
+        .getPublicUrl(`documents/${safeName}`);
 
-      const publicUrl = publicUrlData.publicUrl;
-
-      // 3. LƯU THÔNG TIN VÀO CƠ SỞ DỮ LIỆU
-      setProgressText("Đang lưu thông tin vào cơ sở dữ liệu...");
+      // 3. Lưu toàn bộ thông tin (Kèm Lớp, Môn) vào Database
       const { error: dbError } = await supabase
         .from('documents')
-        .insert([
-          {
-            title: title.trim(),
-            description: description.trim(),
-            image_url: imageUrl.trim() || 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&q=80&w=800',
-            file_name: file.name,
-            file_url: publicUrl
-          }
-        ]);
+        .insert([{
+          title: title.trim(),
+          description: description.trim(),
+          grade: grade,
+          category: category,
+          image_url: imageUrl.trim() || 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&q=80&w=800',
+          file_name: file.name,
+          file_url: publicUrl,
+          download_count: 0
+        }]);
 
-      if (dbError) {
-        throw new Error(`Lỗi Database: ${dbError.message}`);
-      }
+      if (dbError) throw new Error("Lỗi lưu Database: " + dbError.message);
 
-      // THÀNH CÔNG
-      setSuccessMsg("🎉 Đăng tải bài giảng thành công! Đang quay lại Bảng quản trị...");
-      
-      // Chuyển hướng sau 1.5 giây
-      setTimeout(() => {
-        router.push("/admin");
-      }, 1500);
+      setSuccess("🎉 Tải tài liệu lên thành công! Đang chuyển về bảng Quản trị...");
+      setTimeout(() => router.push("/admin"), 1500);
 
     } catch (err: any) {
-      console.error("Upload Error:", err);
-      setErrorMsg(err.message || "Đã xảy ra lỗi không xác định trong quá trình tải lên.");
-    } finally {
-      if (!successMsg) {
-        setLoading(false);
-        setProgressText("");
-      }
+      setError(err.message);
+      setLoading(false);
     }
   };
 
   return (
     <>
-      <UploadStyles />
-      
-      <div className="upload-layout">
-        <div className="upload-container">
+      <AdminUploadStyles />
+      <div className="upload-wrapper">
+        <div className="upload-card">
           
           <div className="upload-header">
             <div>
-              <h1 className="upload-title">➕ Đăng Tải Học Liệu Mới</h1>
-              <p className="upload-subtitle">Thêm bài giảng, giáo án hoặc tài liệu vào hệ thống</p>
+              <h1 className="upload-title">Đăng Tải Tài Liệu</h1>
+              <p className="upload-subtitle">Phân loại theo Lớp và Danh mục chi tiết</p>
             </div>
-            <Link href="/admin" className="btn-back">
-              🔙 Quay Lại
-            </Link>
+            <Link href="/admin" className="btn-cancel">✕ Hủy & Quay Lại</Link>
           </div>
 
-          {errorMsg && (
-            <div className="alert alert-error">
-              <span>⚠️</span> {errorMsg}
-            </div>
-          )}
+          {error && <div className="status-alert status-error">⚠️ {error}</div>}
+          {success && <div className="status-alert status-success">✅ {success}</div>}
 
-          {successMsg && (
-            <div className="alert alert-success">
-              <span>✅</span> {successMsg}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
+          <form onSubmit={handleUploadSubmit}>
+            <div className="form-group full-width">
               <label className="form-label">Tên Bài Giảng / Chủ Đề *</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                placeholder="Ví dụ: Giáo án điện tử Ngữ Văn 6..." 
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                disabled={loading}
-              />
+              <input type="text" className="form-input" placeholder="VD: Giáo án Ngữ Văn 6 - Bài 1..." value={title} onChange={(e) => setTitle(e.target.value)} required disabled={loading}/>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Mô Tả Nội Dung *</label>
-              <textarea 
-                className="form-textarea" 
-                placeholder="Tóm tắt nội dung chính của tài liệu này..." 
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                required
-                disabled={loading}
-              />
-            </div>
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">Cấp Lớp Học *</label>
+                <select className="form-select" value={grade} onChange={(e) => setGrade(e.target.value)} disabled={loading}>
+                  {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
 
-            <div className="form-group">
-              <label className="form-label">Đường Dẫn Ảnh Bìa (Tùy chọn)</label>
-              <input 
-                type="url" 
-                className="form-input" 
-                placeholder="Dán link ảnh (https://...) để làm ảnh bìa. Bỏ trống sẽ dùng ảnh mặc định." 
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Tệp Đính Kèm (PPTX, PDF, DOCX...) *</label>
-              <div className="file-drop-area">
-                <input 
-                  type="file" 
-                  className="file-input-hidden" 
-                  onChange={handleFileChange}
-                  disabled={loading}
-                  required={!file}
-                />
-                
-                {!file ? (
-                  <>
-                    <span className="file-icon">📁</span>
-                    <div style={{ fontWeight: "700", color: "#1e293b", fontSize: "16px", marginBottom: "4px" }}>
-                      Kéo thả hoặc Nhấp để chọn File
-                    </div>
-                    <div style={{ color: "#64748b", fontSize: "13px" }}>
-                      Hỗ trợ mọi định dạng tài liệu học tập
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <span className="file-icon">📄</span>
-                    <div className="file-name-display">
-                      {file.name} ({(file.size / (1024 * 1024)).toFixed(2)} MB)
-                    </div>
-                    <div style={{ marginTop: "12px", fontSize: "13px", color: "#64748b" }}>
-                      Nhấp vào đây nếu muốn chọn file khác
-                    </div>
-                  </>
-                )}
+              <div className="form-group">
+                <label className="form-label">Danh Mục Môn / Thể Loại *</label>
+                <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)} disabled={loading}>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
             </div>
 
-            <button type="submit" className="btn-submit" disabled={loading}>
-              {loading ? (
-                <>⏳ {progressText || "ĐANG XỬ LÝ DỮ LIỆU..."}</>
+            <div className="form-group full-width">
+              <label className="form-label">Mô Tả Nội Dung *</label>
+              <textarea className="form-textarea" placeholder="Nội dung chính của tài liệu này là gì?" value={description} onChange={(e) => setDescription(e.target.value)} required disabled={loading}/>
+            </div>
+
+            <div className="form-group full-width">
+              <label className="form-label">Đường dẫn Ảnh Bìa (Tùy chọn)</label>
+              <input type="url" className="form-input" placeholder="https://..." value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} disabled={loading}/>
+            </div>
+
+            <div className="form-group full-width">
+              <label className="form-label">Tệp Tài Liệu Đính Kèm *</label>
+              {!file ? (
+                <div className="dropzone">
+                  <input type="file" className="drop-input" onChange={handleFileDrop} required disabled={loading}/>
+                  <span className="drop-icon">📤</span>
+                  <div className="drop-title">Kéo thả hoặc Nhấp để chọn File</div>
+                  <div className="drop-desc">Hỗ trợ PDF, DOCX, PPTX (Tối đa 100MB)</div>
+                </div>
               ) : (
-                <>🚀 ĐĂNG TẢI TÀI LIỆU LÊN HỆ THỐNG</>
+                <div className="file-selected">
+                  <input type="file" className="drop-input" onChange={handleFileDrop} disabled={loading}/>
+                  <div className="file-name">📄 {file.name}</div>
+                  <div className="file-size">{(file.size / 1024 / 1024).toFixed(2)} MB - Nhấp để thay đổi file</div>
+                </div>
               )}
+            </div>
+
+            <button type="submit" className="btn-submit" disabled={loading}>
+              {loading ? "⏳ ĐANG XỬ LÝ LÊN ĐÁM MÂY..." : "🚀 LƯU VÀ XUẤT BẢN TÀI LIỆU"}
             </button>
           </form>
 
